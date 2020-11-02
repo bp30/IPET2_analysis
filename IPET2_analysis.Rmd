@@ -1,0 +1,170 @@
+---
+title: "IPET2_analysis"
+author: "Bruce Peng"
+date: "02/11/2020"
+output: html_document
+---
+Here includes analysis codes for IPET.
+
+**Participants and trial numbers:**
+A total of 40 participants are included in this dataset, each participants completed 32 trials thus the total number of trials is 32x40= 1280, 62 trials were deleted due to participants written responses did not conform to the task criteria. Thus, the total number of trials included in the analysis is 1218 
+
+**Data description:**
+*Participant:* N=40
+*Sex:* 0-male, 1-female
+*help_trust:* presentation order of willingness to help rating or trust rating on each trial, help1st= willingness to help first, and trust1st = trust rating first. 
+*CB: * copunterbalance of condition, 1= story ID 1-16 in condition 1 and 17-32 in condition 0, 2= vice versa 
+*Story_ID:* Story presented to participants on each trial, a total of 30 stories were presented. These stories can be found in IPET2_stimuli.xlsx
+*Trial:* Trial order presented to participant.
+*Condition:* Imagine helping (Experimental:Imagine/1), and Estimate helping (Control:Estimate/1)
+*Detail.response:* "The imagined media website/scene in your mind was?" (collected for estimate and imagine helping conditions). Responses were made on a 1(simple)-7(detailed) Likert scale. 
+*Coherence.response:* "The imagined media website/scene in your mind was?" (collected for estimate and imagine helping conditions). Responses were made on a 1(vague)-7(coherent and clear) Likert scale. 
+*Perspective.response:*  "When you identified the media website, imagined helping, or visualized the media website and comments  did you consider  the thoughts and feelings of the person?" (collected for all conditions). Responses are made on a 1(not at all)- 7 (strongly considered). 
+*Help.response:* DV of interest. "How likely would you be to help in this situation?" (collected for all conditions). Responses are made on a 1(not at all)- 7 (very willing) Likert scale.
+*Trust.response:* DV of interest. "If you are in need of help in the future and the person in the story is nearby, how much do you trust that this person will offer help?" (collected for all conditions). Responses are made on a 1(not at all)- 7 (completely) Likert scale.
+
+*Emotional reaction:*
+Emotional reaction (collected for all conditions) rated on a 1(not at all)-7(very strongly) Likert scale for the following emotions:
+-	Soft-hearted
+-	Troubled 
+-	Warm 
+-	Distressed
+-	Sympathetic
+-	Compassionate
+-	Disturbed
+-	Tender
+-	Moved
+-	Worried
+These measures are included to reduce the possibility of participants correctly guaging the experimental goal and are not utilized in the analyses
+
+#Package and directory set up
+
+```{r setup, include=FALSE}
+#Obtain necessary packages
+if (!require(pacman)) install.packages('pacman')
+#install and load packages
+pacman::p_load (sjstats,MuMIn,sjPlot,lme4,lmerTest,lattice,mediation,emmeans,ggeffects,simr,reshape,tidyverse, brms,bayestestR, ggplot2)
+
+#source custom functions
+source("C:/Users/dpen466/Google Drive/Phd (1)/Experiment/Studies/Data/IPE/source/Bayes_scripts.R")
+source("C:/Users/dpen466/Google Drive/Phd (1)/Experiment/Studies/Data/IPE/source/LMM_scripts.R")
+
+# ggplot colours
+palette <- c("#eeaa7b", "#00b159", "#00aedb", "#F8766D", "#9590FF", "#CC9933", "#0000FF")
+```
+
+##Data setup
+
+```{r}
+#Loading data
+IPET2.df<- read.csv('IPET2_fulldata_N=40.csv', header=T)
+IPET2.df$Story_ID<- as.factor(IPET2.df$Story_ID)
+IPET2.df$Condition<- as.factor(IPET2.df$Condition)
+levels (IPET2.df$Condition) <- c('Estimate', 'Imagine')
+IPET2.df$Condition<- relevel(IPET2.df$Condition,ref='Estimate')
+levels(IPET2.df$help_trust) <- droplevels(IPET2.df$help_trust)
+
+#Personal norm of reciprocity questionnaire
+IPET2.PNRQ<- read.csv('IPET2_PNRQ_Clean.csv', header=T)
+
+## Create the averaged score for the 3 PNQR components
+IPET2.PNRQ <-IPET2.PNRQ%>% 
+              mutate(
+                Belief = (Item1+Item2+Item3+Item4+Item5+Item6+Item7+Item8)/8,
+                Reciprocity_Neg = (Item10+Item11+Item12+Item13+Item14+Item15+Item16+Item17+Item18)/9,
+                Reciprocity_Pos = (Item19+Item20+Item21+Item22+Item23+Item24+Item25+Item26+Item27)/9,
+                Belief_C = Belief - mean(Belief,na.rm=T),
+                Reciprocity_Neg_C = Reciprocity_Neg - mean(Reciprocity_Neg,na.rm=T),
+                Reciprocity_Pos_C = Reciprocity_Pos - mean(Reciprocity_Pos,na.rm=T))
+
+## Impute PNRQ Component scores into IPET2.df
+start<-1;PNRQ_n<-1
+for (x in seq(32,1200,by=32)){
+  IPET2.df$Belief[start:x]<-rep(IPET2.PNRQ$Belief[PNRQ_n], 32)
+  IPET2.df$Reciprocity_Neg[start:x]<-rep(IPET2.PNRQ$Reciprocity_Neg[PNRQ_n], 32)
+  IPET2.df$Reciprocity_Pos[start:x]<-rep(IPET2.PNRQ$Reciprocity_Pos[PNRQ_n], 32)
+  start<- x+1;PNRQ_n<-PNRQ_n+1
+}
+
+# Remove trials deleted
+IPET2.df<- IPET2.df[complete.cases(IPET2.df$Condition),]
+
+# Data Tranformation
+IPET2.df<- IPET2.df%>% 
+              mutate(
+                #Create dummy variables
+                dummy_img= as.numeric(Condition=='Imagine'),
+                #Create scene imagery measure
+                Scene=(Coherence+Detail)/2,        
+                #Within-cluster centering
+                Scene_C= group_center(Scene,participant),
+                Coherence_C=group_center(Coherence,participant),
+                Detail_C=group_center(Detail,participant),
+                Perspective_C =group_center(Perspective,participant),
+                Help_C=group_center(Help,participant),
+                Trust_C=group_center (Trust, participant))
+```
+
+# Main effect analysis
+## Willingenss to help and Trust
+### Determine if clustering exist
+```{r}
+# Help
+ranova(lmer(Help~(1|participant)+(1|Story_ID), data=IPET2.df))
+#---------------------------------------------------------------------------------------------------------------
+# Trust 
+ranova(lmer(Trust~(1|participant)+(1|Story_ID), data=IPET2.df))
+
+
+# determine if ordering of help and trust rating matters
+summary(lmer(Help~help_trust+(1|participant)+(1|Story_ID), data=IPET2.df))
+summary(lmer(Trust~help_trust+(1|participant)+(1|Story_ID), data=IPET2.df))
+```
+### Main effect models
+```{r}
+# Parsimonious model -- Help
+step(lmer(Help~Condition+(dummy_img||participant)+(dummy_img||Story_ID), data= IPET.df))
+rm_model<- lmer(Help~Condition+(dummy_img||participant)+(1|Story_ID), data= IPET2.df)
+fm_help<- lmer(Help~Condition+(dummy_img|participant)+(1|Story_ID), data= IPET2.df)
+anova(rm_model,fm_help, refit=F)
+# Results
+summary(fm_help)
+anova(fm_help, ddf ='Kenward-Roger')
+(posthoc_help<- emmeans(fm_help,pairwise~Condition,adjust='bonferroni'))
+confint(posthoc_help)
+r.squaredGLMM(fm_help)
+#---------------------------------------------------------------------------------------------------------------
+# Parsimonious model -- trust
+step(lmer(Trust~Condition+(dummy_img||participant)+(dummy_img||Story_ID), data= IPET2.df))
+rm_trust<- lmer(Trust~Condition+(dummy_img||participant)+(1|Story_ID), data= IPET2.df)
+fm_trust<- lmer(Trust~Condition+(dummy_img|participant)+(1|Story_ID), data= IPET2.df)
+anova(rm_trust,fm_trust,refit=F) #adding in correlation parameter does not include model fit so use 
+# Result
+summary(fm_trust)
+anova(fm_trust, ddf='Kenward-Roger')
+(posthoc_trust<- emmeans(fm_trust,pairwise~Condition,adjust='bonferroni'))
+confint(posthoc_trust)
+r.squaredGLMM(fm_trust)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
