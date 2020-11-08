@@ -62,7 +62,6 @@ IPET2.df$Story_ID<- as.factor(IPET2.df$Story_ID)
 IPET2.df$Condition<- as.factor(IPET2.df$Condition)
 levels (IPET2.df$Condition) <- c('Estimate', 'Imagine')
 IPET2.df$Condition<- relevel(IPET2.df$Condition,ref='Estimate')
-levels(IPET2.df$help_trust) <- droplevels(IPET2.df$help_trust)
 
 #Personal norm of reciprocity questionnaire
 IPET2.PNRQ<- read.csv('IPET2_PNRQ_Clean.csv', header=T)
@@ -80,9 +79,9 @@ IPET2.PNRQ <-IPET2.PNRQ%>%
 ## Impute PNRQ Component scores into IPET2.df
 start<-1;PNRQ_n<-1
 for (x in seq(32,1200,by=32)){
-  IPET2.df$Belief[start:x]<-rep(IPET2.PNRQ$Belief[PNRQ_n], 32)
-  IPET2.df$Reciprocity_Neg[start:x]<-rep(IPET2.PNRQ$Reciprocity_Neg[PNRQ_n], 32)
-  IPET2.df$Reciprocity_Pos[start:x]<-rep(IPET2.PNRQ$Reciprocity_Pos[PNRQ_n], 32)
+  IPET2.df$Belief_C[start:x]<-rep(IPET2.PNRQ$Belief_C[PNRQ_n], 32)
+  IPET2.df$Reciprocity_Neg_C[start:x]<-rep(IPET2.PNRQ$Reciprocity_Neg_C[PNRQ_n], 32)
+  IPET2.df$Reciprocity_Pos_C[start:x]<-rep(IPET2.PNRQ$Reciprocity_Pos_C[PNRQ_n], 32)
   start<- x+1;PNRQ_n<-PNRQ_n+1
 }
 
@@ -589,7 +588,77 @@ ggplot(plot.df2, aes(x=IE, y=Vividness)) +
   ylab ("Conditions")
 ```
 
-# Cross-level interactions
+# Cross-level interactions: PNRQ
+## Help
+```{r}
+# Belief
+step(lmer(Help ~ Condition*Belief_C + (dummy_img||participant) + (dummy_img*Belief_C||Story_ID), data = IPET2.df))
+belief_Help_rm <- lmer(Help ~ Condition*Belief_C + (dummy_img||participant) + (1|Story_ID), data = IPET2.df)
+belief_Help_fm <- lmer(Help ~ Condition*Belief_C + (dummy_img|participant) + (1|Story_ID), data = IPET2.df)
+anova(belief_Help_rm, belief_Help_fm, refit = F)
+anova(belief_Help_fm, ddf = "Kenward-Roger")
+summary(belief_Help_fm)
+emtrends(belief_Help_fm,pairwise~Condition,var='Belief_C')
+#-----------------------------------------------------------------------------------------------------------------------------------------
+# Positive reciprocity
+step(lmer(Help ~ Condition*Reciprocity_Pos_C + (dummy_img||participant) + (dummy_img*Reciprocity_Pos_C||Story_ID), data = IPET2.df))
+pos_rm <- lmer(Help ~ Condition*Reciprocity_Pos_C + (dummy_img||participant) + (1|Story_ID), data = IPET2.df)
+pos_fm <- lmer(Help ~ Condition*Reciprocity_Pos_C + (dummy_img|participant) + (1|Story_ID), data = IPET2.df)
+anova(pos_rm, pos_fm, refit=F)
+anova(pos_fm, ddf = "Kenward-Roger")
+summary(pos_fm)
+emtrends(pos_fm, pairwise ~ Condition,var='Reciprocity_Pos_C')
+#-----------------------------------------------------------------------------------------------------------------------------------------
+# Negative reciprocity
+step(lmer(Help ~ Condition*Reciprocity_Neg_C + (dummy_img||participant) + (dummy_img*Reciprocity_Neg_C||Story_ID), data = IPET2.df))
+neg_rm <- lmer(Help ~ Condition*Reciprocity_Neg_C + (dummy_img||participant) + (Reciprocity_Neg_C||Story_ID), data = IPET2.df)
+neg_fm <- lmer(Help ~ Condition*Reciprocity_Neg_C + (dummy_img|participant) + (Reciprocity_Neg_C|Story_ID), data = IPET2.df)
+neg_fm <- refit_LMM(neg_fm)
+anova(neg_rm, neg_fm, refit=F)
+anova(neg_fm, ddf = "Kenward-Roger")
+summary(neg_fm)
+emtrends(neg_fm, pairwise ~ Condition,var='Reciprocity_Neg_C')
+```
+## Trust
+```{r}
+# Belief
+step(lmer(Trust ~ Condition*Belief_C + (dummy_img||participant) + (dummy_img*Belief_C||Story_ID), data = IPET2.df))
+belief_rm <- lmer(Trust ~ Condition*Belief_C + (dummy_img||participant) + (1|Story_ID), data = IPET2.df)
+belief_fm <- lmer(Trust ~ Condition*Belief_C + (dummy_img|participant) + (1|Story_ID), data = IPET2.df)
+anova(belief_rm, belief_fm, refit = F)
+anova(belief_fm, ddf = "Kenward-Roger")
+summary(belief_fm)
+emtrends(belief_fm,pairwise~Condition,var='Belief_C')
+#-----------------------------------------------------------------------------------------------------------------------------------------
+# Positive reciprocity
+step(lmer(Trust ~ Condition*Reciprocity_Pos_C + (dummy_img||participant) + (dummy_img*Reciprocity_Pos_C||Story_ID), data = IPET2.df))
+pos_rm <- lmer(Trust ~ Condition*Reciprocity_Pos_C + (dummy_img||participant) + (dummy_img:Reciprocity_Pos_C||Story_ID), data = IPET2.df)
+pos_fm <- lmer(Trust ~ Condition*Reciprocity_Pos_C + (dummy_img|participant) + (dummy_img:Reciprocity_Pos_C|Story_ID), data = IPET2.df)
+anova(pos_rm, pos_fm, refit=F)
+anova(pos_fm, ddf = "Kenward-Roger")
+summary(pos_fm)
+emtrends(pos_fm, pairwise ~ Condition,var='Reciprocity_Pos_C')
+#-----------------------------------------------------------------------------------------------------------------------------------------
+# Negative reciprocity
+step(lmer(Trust ~ Condition*Reciprocity_Neg_C + (dummy_img||participant) + (dummy_img*Reciprocity_Neg_C||Story_ID), data = IPET2.df))
+neg_rm <- lmer(Trust ~ Condition*Reciprocity_Neg_C + (dummy_img||participant) + (1|Story_ID), data = IPET2.df)
+neg_fm <- lmer(Trust ~ Condition*Reciprocity_Neg_C + (dummy_img|participant) + (1|Story_ID), data = IPET2.df)
+neg_fm <- refit_LMM(neg_fm)
+anova(neg_rm, neg_fm, refit=F)
+anova(neg_fm, ddf = "Kenward-Roger")
+summary(neg_fm)
+emtrends(neg_fm, pairwise ~ Condition,var='Reciprocity_Neg_C')
+```
+#### Plots
+```{r}
+# Belief
+sd<-sd(IPET2.PNRQ$Belief_C)
+m<-mean(IPET2.PNRQ$Belief_C)
+m-sd;m;m+sd
+ggpredict(belief_fm, c("Condition","Belief_C [-1.16,0,1.16]"))%>% plot()
+ggpredict(belief_fm, c("Belief_C [-1.16,0,1.16]","Condition"))%>% plot()
+```
+
 
 
 
@@ -943,8 +1012,115 @@ violin_int_trust +
   scale_fill_manual(values=c(palette[6], palette[7])) +
   scale_color_manual(values = c(palette[6], palette[7]))
 ```
+### Cross-level interactions
+#### Belief
+```{r}
+Bayes_belief<- brm(data= IPET2.df, family=cumulative("logit"), 
+                  bf(Trust ~ Condition*Belief_C + (Condition|participant) + (Condition*Belief_C|Story_ID)) +
+                                lf(disc ~ 0 + Condition, cmc=F),
+                  prior= c(prior(normal (0,1), class=b),
+                           prior(normal(0,1.2), class=Intercept),
+                           prior(exponential(1), class= sd),
+                           prior(lkj(1), class = cor)),
+                  iter=7000,warmup=2000,chains=8, cores=8,seed=67, sample_prior=T, save_all_pars = T)
+
+# Diagnostic Checks: pp check and traceplots
+pp_check(Bayes_belief)
+plot(Bayes_belief)
+# Rhat and sample sizes
+bayes_samples(Bayes_belief)
+
+# Summary
+summary(Bayes_belief, prob=0.89)
+# pd
+p_direction(Bayes_belief, parameters = c("b_Belief_C", "b_Condition"))
+# % in ROPE
+rope (Bayes_belief, ci=1, range = c(-0.1, 0.1), parameters = c("b_Belief_C", "b_Condition"))
+# OR
+posterior_summary(exp(posterior_belief_trust$`b_ConditionImagine:Belief_C`), probs=c(0.055, 0.945))
+
+# Extract posterior samples 
+set.seed(67);posterior_belief_trust<- posterior_samples(Bayes_belief)
+# Latent SD of simulation conditions
+latent_SD(posterior_belief_trust) 
+
+conditional_effects(Bayes_belief)
+```
 
 
+
+
+
+#### Positive reciprocity
+```{r}
+Bayes_pos <- brm(data= IPET2.df, family=cumulative("logit"), 
+                  bf(Trust ~ Condition*Reciprocity_Pos_C + (Condition|participant) + (Condition*Reciprocity_Pos_C|Story_ID)) +
+                                lf(disc ~ 0 + Condition, cmc=F),
+                  prior= c(prior(normal (0,1), class=b),
+                           prior(normal(0,1.2), class=Intercept),
+                           prior(exponential(1), class= sd),
+                           prior(lkj(1), class = cor)),
+                  iter=7000,warmup=2000,chains=8, cores=8,seed=67, sample_prior=T, save_all_pars = T)               
+
+
+# Diagnostic Checks: pp check and traceplots
+pp_check(Bayes_pos)
+plot(Bayes_pos)
+# Rhat and sample sizes
+bayes_samples(Bayes_pos)
+
+# Summary
+summary(Bayes_pos, prob=0.89)
+# pd
+p_direction(Bayes_pos, parameters = c("b_Reciprocity_Pos_C", "b_Condition"))
+# % in ROPE
+rope (Bayes_pos, ci=1, range = c(-0.1, 0.1), parameters = c("b_Reciprocity_Pos_C", "b_Condition"))
+# OR
+posterior_summary(exp(posterior_pos_trust$`b_ConditionImagine:Reciprocity_Pos_C`), probs=c(0.055, 0.945))
+
+# Extract posterior samples 
+set.seed(67);posterior_pos_trust<- posterior_samples(Bayes_pos)
+# Latent SD of simulation conditions
+latent_SD(posterior_pos_trust)         
+```
+
+#### Negative reciprocity 
+```{r}
+Bayes_neg <- brm(data= IPET2.df, family=cumulative("logit"), 
+                  bf(Trust ~ Condition*Reciprocity_Neg_C + (Condition|participant) + (Condition*Reciprocity_Neg_C|Story_ID)) +
+                                lf(disc ~ 0 + Condition, cmc=F),
+                  prior= c(prior(normal (0,1), class=b),
+                           prior(normal(0,1.2), class=Intercept),
+                           prior(exponential(1), class= sd),
+                           prior(lkj(1), class = cor)),
+                  iter=7000,warmup=2000,chains=8, cores=8,seed=67, sample_prior=T, save_all_pars = T)  
+
+
+# Diagnostic Checks: pp check and traceplots
+pp_check(Bayes_neg)
+plot(Bayes_neg)
+# Rhat and sample sizes
+bayes_samples(Bayes_neg)
+
+# Summary
+summary(Bayes_neg, prob=0.89)
+# pd
+p_direction(Bayes_neg, parameters = c("b_Reciprocity_Neg_C", "b_Condition"))
+# % in ROPE
+rope (Bayes_neg, ci=1, range = c(-0.1, 0.1), parameters = c("b_Reciprocity_Neg_C", "b_Condition"))
+# OR
+posterior_summary(exp(posterior_pos_trust$`b_ConditionImagine:Reciprocity_Neg_C`), probs=c(0.055, 0.945))
+
+# Extract posterior samples 
+set.seed(67);posterior_neg_trust<- posterior_samples(Bayes_neg)
+# Latent SD of simulation conditions
+latent_SD(posterior_neg_trust)    
+```
+
+#### Plot
+```{r}
+
+```
 
 
 
